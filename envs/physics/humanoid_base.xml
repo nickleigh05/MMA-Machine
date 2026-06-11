@@ -1,0 +1,359 @@
+<mujoco model="mma_humanoid_base">
+
+  <compiler angle="degree" autolimits="true" inertiafromgeom="true"/>
+  <option timestep="0.002083" gravity="0 0 -9.81" iterations="50" solver="Newton"/>
+
+  <!-- ── Default classes ───────────────────────────────────────────────────────
+       humanoid_builder.py scales segment masses/lengths by modifying geom size
+       and body pos attributes. Class-level defaults keep per-geom markup minimal.
+  ──────────────────────────────────────────────────────────────────────────── -->
+  <default>
+    <default class="mma_humanoid">
+      <!-- joint damping = kd of the PD loop. <position> actuators have no kd attr. -->
+      <joint damping="15" armature="0.02" limited="true" frictionloss="0.5"/>
+      <!-- contype=2 conaffinity=3 → collides with world (bit 0) and self (bit 1) -->
+      <geom contype="2" conaffinity="3" condim="4" friction="0.8 0.01 0.001" rgba="0.75 0.75 0.8 1"/>
+      <site group="4" size="0.025" rgba="0 1 0 0.4"/>
+    </default>
+    <default class="strike_site">
+      <site group="3" size="0.04" rgba="1 0.1 0.1 0.6"/>
+    </default>
+    <default class="grip_site">
+      <site group="4" size="0.03" rgba="0.1 0.6 1 0.6"/>
+    </default>
+  </default>
+
+  <worldbody>
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         ROOT — Pelvis / Lower Torso
+         Reference fighter: 1.80 m, 80 kg
+         Spawn height z=1.86 m → feet land exactly on canvas at z=0.91 m
+         freejoint = 6 unactuated DOF (position + orientation of root)
+    ══════════════════════════════════════════════════════════════════════ -->
+    <body name="torso_lower" pos="0 0 1.84">
+      <freejoint name="root"/>
+
+      <!-- Pelvis + abdomen: mass ~22.4 kg (28% BM), capsule along local Z -->
+      <geom name="pelvis" class="mma_humanoid" type="capsule"
+            size="0.11 0.10" euler="0 0 0" mass="22.4"/>
+
+      <!-- ── Spine chain: each joint on its own body ──────────────────────── -->
+      <!-- torso_lower has freejoint only (MuJoCo limit: 6 DOF per body).
+           spine_twist co-located with spine_lower on torso_mid — models
+           the lumbar as a 2-DOF joint (axial twist + lateral bend). -->
+      <body name="torso_mid" pos="0 0 0.13">
+        <!-- spine_twist: axial rotation — 28th DOF -->
+        <joint name="spine_twist" type="hinge" axis="0 0 1" range="-30 30"
+               damping="25" class="mma_humanoid"/>
+        <!-- spine_lower: lateral bend -->
+        <joint name="spine_lower" type="hinge" axis="0 1 0" range="-30 30"
+               damping="25" class="mma_humanoid"/>
+        <!-- structural link — mass consolidated into pelvis/thorax -->
+        <geom name="abdomen" class="mma_humanoid" type="capsule"
+              size="0.10 0.06" euler="0 0 0" mass="0.5"/>
+
+        <body name="torso_upper_mid" pos="0 0 0.13">
+          <!-- spine_mid: forward/back flex -->
+          <joint name="spine_mid" type="hinge" axis="1 0 0" range="-25 25"
+                 damping="20" class="mma_humanoid"/>
+          <!-- structural link — mass consolidated into pelvis/thorax -->
+          <geom name="lower_chest" class="mma_humanoid" type="capsule"
+                size="0.105 0.06" euler="0 0 0" mass="0.5"/>
+
+          <!-- ── Upper Torso (Thorax) ──────────────────────────────────────── -->
+          <body name="torso_upper" pos="0 0 0.14">
+            <!-- spine_upper: subtle rotation assist -->
+            <joint name="spine_upper" type="hinge" axis="0 0 1" range="-20 20"
+                   damping="15" class="mma_humanoid"/>
+            <!-- Thorax: absorbs mass from structural abdomen/lower_chest links → 18.0 kg -->
+            <geom name="thorax" class="mma_humanoid" type="capsule"
+                  size="0.13 0.12" euler="0 0 0" mass="18.0"/>
+
+            <site name="site_solar_plexus" pos="0 0.14 -0.05" class="strike_site"/>
+            <site name="site_liver"        pos="-0.09 0.10 -0.05" class="strike_site"/>
+
+            <!-- ── Neck chain ──────────────────────────────────────────────── -->
+            <body name="neck" pos="0 0 0.20">
+              <joint name="neck_pan" type="hinge" axis="0 0 1" range="-70 70"
+                     damping="8" class="mma_humanoid"/>
+              <!-- Neck: mass ~1.2 kg -->
+              <geom name="neck_geom" class="mma_humanoid" type="capsule"
+                    size="0.05 0.04" euler="0 0 0" mass="1.2"/>
+
+              <body name="head" pos="0 0 0.10">
+                <joint name="neck_tilt"    type="hinge" axis="1 0 0" range="-40 45"
+                       damping="8" class="mma_humanoid"/>
+                <!-- lateral flex: ear-to-shoulder, essential for slipping punches -->
+                <joint name="neck_lateral" type="hinge" axis="0 1 0" range="-30 30"
+                       damping="8" class="mma_humanoid"/>
+                <!-- Head: mass ~6.4 kg (8% BM), sphere r=0.115 -->
+                <geom name="head_geom" class="mma_humanoid" type="sphere"
+                      size="0.115" mass="6.4"/>
+                <site name="site_head"     pos="0 0 0"         class="strike_site"/>
+                <site name="site_jaw"      pos="0 0.10 -0.07"  class="strike_site"/>
+                <site name="site_temple_L" pos="-0.10 0 0.02"  class="strike_site"/>
+                <site name="site_temple_R" pos="0.10 0 0.02"   class="strike_site"/>
+              </body>
+            </body>
+
+            <!-- ══════════════════════════════════════════════════════════════
+                 LEFT ARM  (L = fighter's left, +Y side in local torso frame)
+                 Upper arm: mass 1.96 kg, length 0.31 m
+                 Forearm:   mass 1.28 kg, length 0.27 m
+                 Hand:      mass 0.48 kg
+            ══════════════════════════════════════════════════════════════ -->
+            <body name="upper_arm_L" pos="0 0.175 0.08">
+              <joint name="shoulder_x_L" type="hinge" axis="1 0 0" range="-180 60"
+                     damping="10" class="mma_humanoid"/>
+              <joint name="shoulder_y_L" type="hinge" axis="0 1 0" range="-90 135"
+                     damping="10" class="mma_humanoid"/>
+              <joint name="shoulder_z_L" type="hinge" axis="0 0 1" range="-90 90"
+                     damping="8"  class="mma_humanoid"/>
+              <!-- Capsule along +Y (arm hangs down in anatomical neutral) -->
+              <geom name="upper_arm_geom_L" class="mma_humanoid" type="capsule"
+                    size="0.05 0.155" fromto="0 0 0  0 0 -0.31" mass="1.96"/>
+
+              <body name="forearm_L" pos="0 0 -0.31">
+                <joint name="elbow_flexion_L" type="hinge" axis="1 0 0" range="0 145"
+                       damping="8" class="mma_humanoid"/>
+                <!-- pronation/supination: knuckle-over at punch impact -->
+                <joint name="forearm_twist_L" type="hinge" axis="0 0 1" range="-90 90"
+                       damping="5" class="mma_humanoid"/>
+                <geom name="forearm_geom_L" class="mma_humanoid" type="capsule"
+                      size="0.04 0.135" fromto="0 0 0  0 0 -0.27" mass="1.28"/>
+
+                <body name="hand_L" pos="0 0 -0.27">
+                  <joint name="wrist_x_L" type="hinge" axis="1 0 0" range="-70 70"
+                         damping="5" class="mma_humanoid"/>
+                  <geom name="hand_geom_L" class="mma_humanoid" type="capsule"
+                        size="0.04 0.04" fromto="0 0 0  0 0 -0.08" mass="0.48"/>
+                  <site name="site_hand_L" pos="0 0 -0.06" class="grip_site"/>
+                </body>
+              </body>
+            </body>
+
+            <!-- ══════════════════════════════════════════════════════════════
+                 RIGHT ARM  (-Y side)
+            ══════════════════════════════════════════════════════════════ -->
+            <body name="upper_arm_R" pos="0 -0.175 0.08">
+              <joint name="shoulder_x_R" type="hinge" axis="1 0 0" range="-180 60"
+                     damping="10" class="mma_humanoid"/>
+              <joint name="shoulder_y_R" type="hinge" axis="0 1 0" range="-135 90"
+                     damping="10" class="mma_humanoid"/>
+              <joint name="shoulder_z_R" type="hinge" axis="0 0 1" range="-90 90"
+                     damping="8"  class="mma_humanoid"/>
+              <geom name="upper_arm_geom_R" class="mma_humanoid" type="capsule"
+                    size="0.05 0.155" fromto="0 0 0  0 0 -0.31" mass="1.96"/>
+
+              <body name="forearm_R" pos="0 0 -0.31">
+                <joint name="elbow_flexion_R" type="hinge" axis="1 0 0" range="0 145"
+                       damping="8" class="mma_humanoid"/>
+                <joint name="forearm_twist_R" type="hinge" axis="0 0 1" range="-90 90"
+                       damping="5" class="mma_humanoid"/>
+                <geom name="forearm_geom_R" class="mma_humanoid" type="capsule"
+                      size="0.04 0.135" fromto="0 0 0  0 0 -0.27" mass="1.28"/>
+
+                <body name="hand_R" pos="0 0 -0.27">
+                  <joint name="wrist_x_R" type="hinge" axis="1 0 0" range="-70 70"
+                         damping="5" class="mma_humanoid"/>
+                  <geom name="hand_geom_R" class="mma_humanoid" type="capsule"
+                        size="0.04 0.04" fromto="0 0 0  0 0 -0.08" mass="0.48"/>
+                  <site name="site_hand_R" pos="0 0 -0.06" class="grip_site"/>
+                </body>
+              </body>
+            </body>
+
+          </body> <!-- torso_upper -->
+        </body> <!-- torso_upper_mid -->
+      </body> <!-- torso_mid -->
+
+      <!-- ════════════════════════════════════════════════════════════════════
+           LEFT LEG  (+Y side of pelvis)
+           Thigh:  mass 7.20 kg, length 0.42 m
+           Shank:  mass 3.44 kg, length 0.40 m
+           Foot:   mass 1.12 kg
+      ════════════════════════════════════════════════════════════════════ -->
+      <body name="thigh_L" pos="0 0.095 -0.05">
+        <joint name="hip_x_L" type="hinge" axis="1 0 0" range="-30 120"
+               damping="20" class="mma_humanoid"/>
+        <joint name="hip_y_L" type="hinge" axis="0 1 0" range="-45 45"
+               damping="20" class="mma_humanoid"/>
+        <joint name="hip_z_L" type="hinge" axis="0 0 1" range="-45 45"
+               damping="15" class="mma_humanoid"/>
+        <geom name="thigh_geom_L" class="mma_humanoid" type="capsule"
+              size="0.07 0.21" fromto="0 0 0  0 0 -0.42" mass="7.20"/>
+        <site name="site_thigh_L" pos="0 0 -0.21" class="strike_site"/>
+
+        <body name="shank_L" pos="0 0 -0.42">
+          <joint name="knee_flexion_L" type="hinge" axis="1 0 0" range="0 140"
+                 damping="15" class="mma_humanoid"/>
+          <geom name="shank_geom_L" class="mma_humanoid" type="capsule"
+                size="0.05 0.20" fromto="0 0 0  0 0 -0.40" mass="3.44"/>
+          <site name="site_calf_L" pos="0 0 -0.20" class="strike_site"/>
+
+          <!-- foot body at -0.38 (not -0.40): ankle joint sits 0.02 m inside shin capsule,
+               closing the visual gap without changing canvas contact height. -->
+          <body name="foot_L" pos="0 0 -0.38">
+            <joint name="ankle_x_L" type="hinge" axis="1 0 0" range="-50 20"
+                   damping="10" class="mma_humanoid"/>
+            <joint name="ankle_y_L" type="hinge" axis="0 1 0" range="-30 30"
+                   damping="8"  class="mma_humanoid"/>
+            <geom name="heel_geom_L" class="mma_humanoid" type="box"
+                  size="0.07 0.05 0.04" pos="-0.02 0 -0.04" mass="0.82"/>
+            <site name="site_heel_L" pos="-0.07 0 -0.08"/>
+            <body name="toes_L" pos="0.06 0 -0.04">
+              <joint name="toe_flex_L" type="hinge" axis="0 1 0" range="-20 45"
+                     damping="4" class="mma_humanoid"/>
+              <geom name="toe_geom_L" class="mma_humanoid" type="box"
+                    size="0.05 0.05 0.03" pos="0.04 0 -0.01" mass="0.30"/>
+              <site name="site_toe_L" pos="0.05 0 -0.04"/>
+            </body>
+          </body>
+        </body>
+      </body>
+
+      <!-- ════════════════════════════════════════════════════════════════════
+           RIGHT LEG  (-Y side of pelvis)
+      ════════════════════════════════════════════════════════════════════ -->
+      <body name="thigh_R" pos="0 -0.095 -0.05">
+        <joint name="hip_x_R" type="hinge" axis="1 0 0" range="-30 120"
+               damping="20" class="mma_humanoid"/>
+        <joint name="hip_y_R" type="hinge" axis="0 1 0" range="-45 45"
+               damping="20" class="mma_humanoid"/>
+        <joint name="hip_z_R" type="hinge" axis="0 0 1" range="-45 45"
+               damping="15" class="mma_humanoid"/>
+        <geom name="thigh_geom_R" class="mma_humanoid" type="capsule"
+              size="0.07 0.21" fromto="0 0 0  0 0 -0.42" mass="7.20"/>
+        <site name="site_thigh_R" pos="0 0 -0.21" class="strike_site"/>
+
+        <body name="shank_R" pos="0 0 -0.42">
+          <joint name="knee_flexion_R" type="hinge" axis="1 0 0" range="0 140"
+                 damping="15" class="mma_humanoid"/>
+          <geom name="shank_geom_R" class="mma_humanoid" type="capsule"
+                size="0.05 0.20" fromto="0 0 0  0 0 -0.40" mass="3.44"/>
+          <site name="site_calf_R" pos="0 0 -0.20" class="strike_site"/>
+
+          <body name="foot_R" pos="0 0 -0.38">
+            <joint name="ankle_x_R" type="hinge" axis="1 0 0" range="-50 20"
+                   damping="10" class="mma_humanoid"/>
+            <joint name="ankle_y_R" type="hinge" axis="0 1 0" range="-30 30"
+                   damping="8"  class="mma_humanoid"/>
+            <geom name="heel_geom_R" class="mma_humanoid" type="box"
+                  size="0.07 0.05 0.04" pos="-0.02 0 -0.04" mass="0.82"/>
+            <site name="site_heel_R" pos="-0.07 0 -0.08"/>
+            <body name="toes_R" pos="0.06 0 -0.04">
+              <joint name="toe_flex_R" type="hinge" axis="0 1 0" range="-20 45"
+                     damping="4" class="mma_humanoid"/>
+              <geom name="toe_geom_R" class="mma_humanoid" type="box"
+                    size="0.05 0.05 0.03" pos="0.04 0 -0.01" mass="0.30"/>
+              <site name="site_toe_R" pos="0.05 0 -0.04"/>
+            </body>
+          </body>
+        </body>
+      </body>
+
+    </body> <!-- torso_lower / root -->
+  </worldbody>
+
+  <!-- ── Adjacent-segment self-collision exclusions ──────────────────────────
+       Prevents jitter from permanently-touching neighbor geoms.
+  ──────────────────────────────────────────────────────────────────────────── -->
+  <contact>
+    <exclude body1="torso_lower"    body2="torso_mid"/>
+    <exclude body1="torso_mid"      body2="torso_upper_mid"/>
+    <exclude body1="torso_upper_mid" body2="torso_upper"/>
+    <exclude body1="torso_upper"    body2="neck"/>
+    <exclude body1="neck"           body2="head"/>
+    <exclude body1="torso_upper"    body2="upper_arm_L"/>
+    <exclude body1="upper_arm_L"    body2="forearm_L"/>
+    <exclude body1="forearm_L"      body2="hand_L"/>
+    <exclude body1="torso_upper"    body2="upper_arm_R"/>
+    <exclude body1="upper_arm_R"    body2="forearm_R"/>
+    <exclude body1="forearm_R"      body2="hand_R"/>
+    <exclude body1="torso_lower"    body2="thigh_L"/>
+    <exclude body1="thigh_L"        body2="shank_L"/>
+    <exclude body1="shank_L"        body2="foot_L"/>
+    <exclude body1="foot_L"         body2="toes_L"/>
+    <exclude body1="torso_lower"    body2="thigh_R"/>
+    <exclude body1="thigh_R"        body2="shank_R"/>
+    <exclude body1="shank_R"        body2="foot_R"/>
+    <exclude body1="foot_R"         body2="toes_R"/>
+  </contact>
+
+  <!-- ── Actuators (28 position PD controllers) ──────────────────────────────
+       kp = stiffness (starting estimates, tuned in Step 0 PD sweep)
+       kd handled by joint damping in default class
+       forcerange = T_max anatomical torque ceiling
+  ──────────────────────────────────────────────────────────────────────────── -->
+  <actuator>
+    <!-- Spine & neck (5 + spine_twist = 6 but spine_twist is 28th DOF) -->
+    <position name="act_spine_twist"   joint="spine_twist"   kp="300"  forcerange="-80  80"/>
+    <position name="act_spine_lower"   joint="spine_lower"   kp="400"  forcerange="-160 160"/>
+    <position name="act_spine_mid"     joint="spine_mid"     kp="400"  forcerange="-130 130"/>
+    <position name="act_spine_upper"   joint="spine_upper"   kp="350"  forcerange="-100 100"/>
+    <position name="act_neck_pan"      joint="neck_pan"      kp="100"  forcerange="-30  30"/>
+    <position name="act_neck_tilt"     joint="neck_tilt"     kp="100"  forcerange="-25  25"/>
+    <position name="act_neck_lateral"  joint="neck_lateral"  kp="80"   forcerange="-20  20"/>
+
+    <!-- Left arm -->
+    <position name="act_shoulder_x_L"  joint="shoulder_x_L"  kp="250"  forcerange="-100 100"/>
+    <position name="act_shoulder_y_L"  joint="shoulder_y_L"  kp="250"  forcerange="-80  80"/>
+    <position name="act_shoulder_z_L"  joint="shoulder_z_L"  kp="200"  forcerange="-50  50"/>
+    <position name="act_elbow_L"          joint="elbow_flexion_L"  kp="200" forcerange="-70  70"/>
+    <position name="act_forearm_twist_L"  joint="forearm_twist_L"  kp="60"  forcerange="-20  20"/>
+    <position name="act_wrist_x_L"        joint="wrist_x_L"        kp="80"  forcerange="-25  25"/>
+
+    <!-- Right arm -->
+    <position name="act_shoulder_x_R"  joint="shoulder_x_R"  kp="250"  forcerange="-100 100"/>
+    <position name="act_shoulder_y_R"  joint="shoulder_y_R"  kp="250"  forcerange="-80  80"/>
+    <position name="act_shoulder_z_R"  joint="shoulder_z_R"  kp="200"  forcerange="-50  50"/>
+    <position name="act_elbow_R"          joint="elbow_flexion_R"  kp="200" forcerange="-70  70"/>
+    <position name="act_forearm_twist_R"  joint="forearm_twist_R"  kp="60"  forcerange="-20  20"/>
+    <position name="act_wrist_x_R"        joint="wrist_x_R"        kp="80"  forcerange="-25  25"/>
+
+    <!-- Left leg -->
+    <position name="act_hip_x_L"       joint="hip_x_L"       kp="800"  forcerange="-220 220"/>
+    <position name="act_hip_y_L"       joint="hip_y_L"       kp="700"  forcerange="-140 140"/>
+    <position name="act_hip_z_L"       joint="hip_z_L"       kp="500"  forcerange="-80  80"/>
+    <position name="act_knee_L"        joint="knee_flexion_L" kp="700"  forcerange="-170 170"/>
+    <position name="act_ankle_x_L"     joint="ankle_x_L"     kp="400"  forcerange="-120 120"/>
+    <position name="act_ankle_y_L"     joint="ankle_y_L"     kp="250"  forcerange="-50  50"/>
+    <position name="act_toe_flex_L"    joint="toe_flex_L"    kp="50"   forcerange="-15  15"/>
+
+    <!-- Right leg -->
+    <position name="act_hip_x_R"       joint="hip_x_R"       kp="800"  forcerange="-220 220"/>
+    <position name="act_hip_y_R"       joint="hip_y_R"       kp="700"  forcerange="-140 140"/>
+    <position name="act_hip_z_R"       joint="hip_z_R"       kp="500"  forcerange="-80  80"/>
+    <position name="act_knee_R"        joint="knee_flexion_R" kp="700"  forcerange="-170 170"/>
+    <position name="act_ankle_x_R"     joint="ankle_x_R"     kp="400"  forcerange="-120 120"/>
+    <position name="act_ankle_y_R"     joint="ankle_y_R"     kp="250"  forcerange="-50  50"/>
+    <position name="act_toe_flex_R"    joint="toe_flex_R"    kp="50"   forcerange="-15  15"/>
+  </actuator>
+
+  <!-- ── Sensors ──────────────────────────────────────────────────────────────
+       Touch sites flush with foot bottom → register ground contact correctly.
+       Frame sensors on root body provide egocentric velocity/orientation for obs.
+  ──────────────────────────────────────────────────────────────────────────── -->
+  <sensor>
+    <touch name="touch_heel_L"  site="site_heel_L"/>
+    <touch name="touch_toe_L"   site="site_toe_L"/>
+    <touch name="touch_heel_R"  site="site_heel_R"/>
+    <touch name="touch_toe_R"   site="site_toe_R"/>
+
+    <framelinvel name="root_linvel" objtype="body" objname="torso_lower"/>
+    <frameangvel name="root_angvel" objtype="body" objname="torso_lower"/>
+    <framequat   name="root_quat"   objtype="body" objname="torso_lower"/>
+  </sensor>
+
+  <!-- ── Keyframe ─────────────────────────────────────────────────────────────
+       Anatomical neutral: all 33 joints at 0°, arms hanging at sides.
+       7 freejoint values (x y z qw qx qy qz) + 33 joint angles = 40 total.
+       z=1.86 places feet flush on canvas at z=0.91 m.
+  ──────────────────────────────────────────────────────────────────────────── -->
+  <keyframe>
+    <key name="stand"
+         qpos="0 0 1.84  1 0 0 0  0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0"/>
+  </keyframe>
+
+</mujoco>
