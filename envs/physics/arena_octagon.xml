@@ -6,13 +6,34 @@
     <geom contype="1" conaffinity="1" condim="3"/>
   </default>
 
+  <!-- ── Octagonal platform mesh ───────────────────────────────────────────────
+       Extended apothem: 4.57 m (cage) + 1.37 m (~4.5 ft apron) = 5.94 m
+       Corner radius R = 5.94 / cos(22.5°) = 6.43 m
+       8 top vertices (z=0.91) + 8 bottom vertices (z=0), indices 0-7 top, 8-15 bottom.
+       Vertex angles (from +X, CCW): 22.5°, 67.5°, 112.5°, 157.5°, 202.5°, 247.5°, 292.5°, 337.5°
+  ──────────────────────────────────────────────────────────────────────────── -->
+  <asset>
+    <mesh name="octagon_platform"
+      vertex="
+         5.941  2.461 0.91    2.461  5.941 0.91   -2.461  5.941 0.91   -5.941  2.461 0.91
+        -5.941 -2.461 0.91   -2.461 -5.941 0.91    2.461 -5.941 0.91    5.941 -2.461 0.91
+         5.941  2.461 0.00    2.461  5.941 0.00   -2.461  5.941 0.00   -5.941  2.461 0.00
+        -5.941 -2.461 0.00   -2.461 -5.941 0.00    2.461 -5.941 0.00    5.941 -2.461 0.00"
+      face="
+        0 1 2   0 2 3   0 3 4   0 4 5   0 5 6   0 6 7
+        8 10 9  8 11 10  8 12 11  8 13 12  8 14 13  8 15 14
+        8 9 1   8 1 0   9 10 2  9 2 1   10 11 3  10 3 2
+        11 12 4  11 4 3  12 13 5  12 5 4  13 14 6  13 6 5
+        14 15 7  14 7 6  15 8 0  15 0 7"/>
+  </asset>
+
   <worldbody>
 
     <!-- ── Canvas / platform ────────────────────────────────────────────────── -->
-    <!-- Solid block from ground to 0.91 m (3 ft platform). Top surface at Z=0.91.
-         Half-height 0.455, center at Z=0.455. Extends 5.2 m past cage walls on all sides. -->
+    <!-- True octagonal prism. Top face at Z=0.91 m (3 ft platform).
+         Apron extends ~4.5 ft beyond cage walls. Solid from Z=0 to Z=0.91. -->
     <geom name="canvas"
-          type="box" size="5.2 5.2 0.455" pos="0 0 0.455"
+          type="mesh" mesh="octagon_platform"
           friction="0.9 0.005 0.0001" rgba="0.9 0.9 0.9 1"
           contype="1" conaffinity="1"/>
 
