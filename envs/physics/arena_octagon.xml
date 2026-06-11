@@ -1,0 +1,114 @@
+<mujoco model="mma_octagon">
+  <compiler angle="degree" autolimits="true"/>
+  <option timestep="0.002083" gravity="0 0 -9.81" iterations="50" solver="Newton"/>
+
+  <default>
+    <geom contype="1" conaffinity="1" condim="3"/>
+  </default>
+
+  <worldbody>
+
+    <!-- ── Canvas / platform ────────────────────────────────────────────────── -->
+    <!-- Solid block from ground to 0.91 m (3 ft platform). Top surface at Z=0.91.
+         Half-height 0.455, center at Z=0.455. Extends 5.2 m past cage walls on all sides. -->
+    <geom name="canvas"
+          type="box" size="5.2 5.2 0.455" pos="0 0 0.455"
+          friction="0.9 0.005 0.0001" rgba="0.9 0.9 0.9 1"
+          contype="1" conaffinity="1"/>
+
+    <!-- ── Fence panels (8×) ─────────────────────────────────────────────────
+         half-size: 1.895 (half of 3.79 m wide) × 0.025 (half of 0.05 m thick) × 0.915 (half of 1.83 m tall)
+         apothem: 4.57 m  |  wall-bottom sits on canvas → center Z = 0.91 + 0.915 = 1.825
+         solref/solimp: slight compliance so fighters don't bounce violently off chain-link
+    ──────────────────────────────────────────────────────────────────────── -->
+    <geom name="wall_N"
+          type="box" size="1.895 0.025 0.915" pos="0 4.57 1.825" euler="0 0 0"
+          friction="1.2 0.005 0.0001" solref="0.02 1" solimp="0.9 0.95 0.001"
+          rgba="0.7 0.7 0.7 0.25" contype="1" conaffinity="1"/>
+
+    <geom name="wall_NE"
+          type="box" size="1.895 0.025 0.915" pos="3.23 3.23 1.825" euler="0 0 -45"
+          friction="1.2 0.005 0.0001" solref="0.02 1" solimp="0.9 0.95 0.001"
+          rgba="0.7 0.7 0.7 0.25" contype="1" conaffinity="1"/>
+
+    <geom name="wall_E"
+          type="box" size="1.895 0.025 0.915" pos="4.57 0 1.825" euler="0 0 -90"
+          friction="1.2 0.005 0.0001" solref="0.02 1" solimp="0.9 0.95 0.001"
+          rgba="0.7 0.7 0.7 0.25" contype="1" conaffinity="1"/>
+
+    <geom name="wall_SE"
+          type="box" size="1.895 0.025 0.915" pos="3.23 -3.23 1.825" euler="0 0 -135"
+          friction="1.2 0.005 0.0001" solref="0.02 1" solimp="0.9 0.95 0.001"
+          rgba="0.7 0.7 0.7 0.25" contype="1" conaffinity="1"/>
+
+    <geom name="wall_S"
+          type="box" size="1.895 0.025 0.915" pos="0 -4.57 1.825" euler="0 0 180"
+          friction="1.2 0.005 0.0001" solref="0.02 1" solimp="0.9 0.95 0.001"
+          rgba="0.7 0.7 0.7 0.25" contype="1" conaffinity="1"/>
+
+    <geom name="wall_SW"
+          type="box" size="1.895 0.025 0.915" pos="-3.23 -3.23 1.825" euler="0 0 135"
+          friction="1.2 0.005 0.0001" solref="0.02 1" solimp="0.9 0.95 0.001"
+          rgba="0.7 0.7 0.7 0.25" contype="1" conaffinity="1"/>
+
+    <geom name="wall_W"
+          type="box" size="1.895 0.025 0.915" pos="-4.57 0 1.825" euler="0 0 90"
+          friction="1.2 0.005 0.0001" solref="0.02 1" solimp="0.9 0.95 0.001"
+          rgba="0.7 0.7 0.7 0.25" contype="1" conaffinity="1"/>
+
+    <geom name="wall_NW"
+          type="box" size="1.895 0.025 0.915" pos="-3.23 3.23 1.825" euler="0 0 45"
+          friction="1.2 0.005 0.0001" solref="0.02 1" solimp="0.9 0.95 0.001"
+          rgba="0.7 0.7 0.7 0.25" contype="1" conaffinity="1"/>
+
+    <!-- ── Corner posts (8×) ─────────────────────────────────────────────────
+         radius 0.10 m, half-height 0.915 m  |  corner radius = 4.95 m
+         post positions = 4.95 × (sin θ, cos θ) at 22.5° offsets between wall centers
+    ──────────────────────────────────────────────────────────────────────── -->
+    <geom name="post_N_NE"
+          type="cylinder" size="0.10 0.915" pos="1.894 4.573 1.825"
+          friction="1.2 0.005 0.0001" contype="1" conaffinity="1"/>
+
+    <geom name="post_NE_E"
+          type="cylinder" size="0.10 0.915" pos="4.573 1.894 1.825"
+          friction="1.2 0.005 0.0001" contype="1" conaffinity="1"/>
+
+    <geom name="post_E_SE"
+          type="cylinder" size="0.10 0.915" pos="4.573 -1.894 1.825"
+          friction="1.2 0.005 0.0001" contype="1" conaffinity="1"/>
+
+    <geom name="post_SE_S"
+          type="cylinder" size="0.10 0.915" pos="1.894 -4.573 1.825"
+          friction="1.2 0.005 0.0001" contype="1" conaffinity="1"/>
+
+    <geom name="post_S_SW"
+          type="cylinder" size="0.10 0.915" pos="-1.894 -4.573 1.825"
+          friction="1.2 0.005 0.0001" contype="1" conaffinity="1"/>
+
+    <geom name="post_SW_W"
+          type="cylinder" size="0.10 0.915" pos="-4.573 -1.894 1.825"
+          friction="1.2 0.005 0.0001" contype="1" conaffinity="1"/>
+
+    <geom name="post_W_NW"
+          type="cylinder" size="0.10 0.915" pos="-4.573 1.894 1.825"
+          friction="1.2 0.005 0.0001" contype="1" conaffinity="1"/>
+
+    <geom name="post_NW_N"
+          type="cylinder" size="0.10 0.915" pos="-1.894 4.573 1.825"
+          friction="1.2 0.005 0.0001" contype="1" conaffinity="1"/>
+
+    <!-- ── Cage-pin sensor sites (8×) ────────────────────────────────────────
+         Placed on the inner face of each wall (apothem - half-thickness = 4.57 - 0.025 = 4.545 m).
+         Used by envs/octagon.py to detect cage-pin state and expose wall normals.
+    ──────────────────────────────────────────────────────────────────────── -->
+    <site name="wall_N_pin"  pos="0 4.545 1.825"          size="0.05" group="3"/>
+    <site name="wall_NE_pin" pos="3.216 3.216 1.825"      size="0.05" group="3"/>
+    <site name="wall_E_pin"  pos="4.545 0 1.825"          size="0.05" group="3"/>
+    <site name="wall_SE_pin" pos="3.216 -3.216 1.825"     size="0.05" group="3"/>
+    <site name="wall_S_pin"  pos="0 -4.545 1.825"         size="0.05" group="3"/>
+    <site name="wall_SW_pin" pos="-3.216 -3.216 1.825"    size="0.05" group="3"/>
+    <site name="wall_W_pin"  pos="-4.545 0 1.825"         size="0.05" group="3"/>
+    <site name="wall_NW_pin" pos="-3.216 3.216 1.825"     size="0.05" group="3"/>
+
+  </worldbody>
+</mujoco>
